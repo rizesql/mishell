@@ -1,0 +1,17 @@
+[package]
+name = "shell"
+version = "0.1.0"
+edition = "2021"
+authors = ["Stefan Rizescu <iulian.stefan.rizescu@gmail.com>"]
+
+[workspace]
+members = ["lib/process"]
+
+[workspace.dependencies]
+miette = { version = "7.4.0", features = ["fancy"] }
+os_pipe = { version = "1.2.1", features = ["io_safety"] }
+
+[dependencies]
+process = { path = "./lib/process", version = "*" }
+
+miette = { workspace = true }
