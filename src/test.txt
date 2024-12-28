@@ -1,0 +1,37 @@
+echo "Hello, World!";
+
+ls -l /home;
+
+ls | grep "file" ;
+
+echo "Hello, World!" > hello.txt;
+
+grep "error" < log.txt ;
+
+ls | grep "file" > file_with_file.txt ;
+
+ls | grep "file" && echo "Success";
+
+ls | grep "file" || echo "No files found";
+
+ls > files.txt && echo "List saved to files.txt" ;
+
+for file in *.txt; do echo $file; done
+
+for file in *.txt; do cat $file | grep "error"; done
+
+for file in *.txt; do grep "error" $file > errors.txt; done
+
+if ls file.txt; then echo "File exists"; fi
+
+if ls file.txt && grep "pattern" file.txt; then echo "Patern found"; else echo "Patter not found"; fi
+
+for file in *.txt; do if grep "error" $file; then echo "$echo_contains_errors"; fi; done
+
+for file in *.txt; do
+    if grep "error" $file; then
+        echo "$file_contains_errors"
+    else
+        echo "$file_is_clean"
+    fi
+done
