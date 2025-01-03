@@ -1,0 +1,23 @@
+[package]
+name = "prompt"
+version = "0.1.0"
+edition = "2021"
+
+# [lints]
+# workspace = true
+
+[dependencies]
+mishell_core = { path = "../mishell_core", version = "*" }
+
+miette = { workspace = true }
+nix = { workspace = true }
+nu-ansi-term = { workspace = true }
+reedline = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+
+# [target.'cfg(any(windows, unix))'.dependencies]
+# tokio = { version = "1.42.0", features = ["macros", "signal"] }

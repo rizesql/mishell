@@ -5,15 +5,39 @@ edition = "2021"
 authors = ["Stefan Rizescu <iulian.stefan.rizescu@gmail.com>"]
 
 [workspace]
-members = ["lib/process"]
+members = ["lib/ast", "lib/mishell_core", "lib/process", "lib/prompt"]
 
 [workspace.dependencies]
 miette = { version = "7.4.0", features = ["fancy"] }
+nix = { version = "0.29.0", features = [
+  "fs",
+  "process",
+  "signal",
+  "term",
+  "user",
+] }
+nu-ansi-term = "0.50.1"
 os_pipe = { version = "1.2.1", features = ["io_safety"] }
+thiserror = "2.0.9"
+reedline = { version = "0.38.0", features = ["sqlite"] }
+regex = "1.8"
+serde = { version = "1.0.217", features = ["derive"] }
+serde_json = "1.0.134"
+tokio = { version = "1.42.0", features = ["rt", "rt-multi-thread", "sync"] }
+tracing = "0.1.41"
 
 [dependencies]
+mishell_core = { path = "./lib/mishell_core", version = "*" }
 process = { path = "./lib/process", version = "*" }
+prompt = { path = "./lib/prompt", version = "*" }
 
 miette = { workspace = true }
+nu-ansi-term = { workspace = true }
+reedline = { workspace = true }
+tracing = { workspace = true }
+tokio = { workspace = true }
 
-regex = "1.8"
+crossterm = "0.28.1"
+chrono = "0.4.39"
+gethostname = "0.5.0"
+tracing-subscriber = "0.3.19"
