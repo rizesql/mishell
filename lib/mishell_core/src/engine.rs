@@ -31,10 +31,11 @@ impl Engine {
         let mut parser = ast::parser_v2::Parser::new(tokens.as_slice());
         tracing::info!("{:?}", tokens);
 
-        if let Some(r) = parser.redirect() {
-            tracing::info!("REDIRECT: {r}");
+        if let Some(p) = parser.program() {
+            tracing::info!("PROGRAM: \n{p}  \n{:?}", p);
         }
 
+        tracing::info!("left {:?}", parser.remaining());
         Ok(exec::ExitCode::success())
     }
 }

@@ -1,4 +1,9 @@
-use crate::{ast, parser_v2::Parser, tokens::Symbol};
+use crate::{
+    ast, one_of,
+    parser_v2::Parser,
+    repeat,
+    tokens::{Symbol, Token},
+};
 
 /// I/O redirection
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -103,7 +108,7 @@ impl From<Vec<Redirect>> for Redirects {
 impl std::fmt::Display for Redirects {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for r in &self.0 {
-            write!(f, "{r}")?;
+            write!(f, "{r} ")?;
         }
 
         Ok(())
@@ -111,49 +116,98 @@ impl std::fmt::Display for Redirects {
 }
 
 impl Parser<'_> {
+    #[tracing::instrument(skip(self), ret)]
     pub fn redirect(&mut self) -> Option<Redirect> {
-        let fd = self.io_number();
-        let kind = self.redirect_kind()?;
-        let dest = self.redirect_dest()?;
+        self.transaction(|parser| {
+            let fd = parser.io_number();
+            let kind = parser.redirect_kind()?;
+            let dest = parser.redirect_dest()?;
 
-        match (kind, &dest) {
-            // destination must be a file name
-            (
-                Kind::Read | Kind::Write | Kind::Append | Kind::ReadAndWrite | Kind::Clobber,
-                Destination::Filename(_),
-            ) => Some(Redirect::File(fd, kind, dest)),
+            match (kind, &dest) {
+                // destination must be a file name
+                (
+                    Kind::Read | Kind::Write | Kind::Append | Kind::ReadAndWrite | Kind::Clobber,
+                    Destination::Filename(_),
+                ) => {
+                    let res = Redirect::File(fd, kind, dest);
+                    Some(res)
+                }
 
-            // destination can be a file or a file descriptor
-            (Kind::DuplicateIn | Kind::DuplicateOut, _) => Some(Redirect::File(fd, kind, dest)),
-            // any other combination is not correct
-            _ => None,
-        }
+                // destination can be a file or a file descriptor
+                (Kind::DuplicateIn | Kind::DuplicateOut, _) => {
+                    let res = Redirect::File(fd, kind, dest);
+                    Some(res)
+                }
+                // any other combination is not correct
+                _ => None,
+            }
+        })
     }
 
+    #[tracing::instrument(skip(self), ret)]
     pub fn redirects(&mut self) -> Option<Redirects> {
-        let mut acc = Vec::new();
-        while let Some(r) = self.redirect() {
-            acc.push(r);
-        }
+        self.transaction(|parser| {
+            let acc = repeat!(|| parser.redirect());
 
-        if !acc.is_empty() {
-            Some(Redirects::from(acc))
-        } else {
-            None
-        }
+            if !acc.is_empty() {
+                let res = Redirects::from(acc);
+                Some(res)
+            } else {
+                None
+            }
+        })
     }
 
+    #[tracing::instrument(skip(self), ret)]
     fn redirect_kind(&mut self) -> Option<Kind> {
-        self.choice(|tok| tok.is_symbol()?.try_into().ok())
+        self.transaction(|parser| {
+            let res = parser.choice(|tok| tok.as_symbol()?.try_into().ok())?;
+            Some(res)
+        })
     }
 
+    #[tracing::instrument(skip(self), ret)]
     fn redirect_dest(&mut self) -> Option<Destination> {
-        self.fd()
-            .map(Destination::Fd)
-            .or(self.filename().map(Destination::Filename))
+        self.transaction(|parser| {
+            // if we can parse a fd from a token, then set it as Destination, else parse a filename
+            let res = one_of!(parser, || parser.fd().map(Destination::Fd), || parser
+                .filename()
+                .map(Destination::Filename))?;
+
+            Some(res)
+        })
     }
 
+    // prohibited chars: `/`, ` `, `:`, `\`, `*` , `?`, `"`, `>`, `<`, `|`
+    #[tracing::instrument(skip(self), ret)]
     fn filename(&mut self) -> Option<ast::Word> {
-        self.choice(|tok| tok.is_word().map(ast::Word::from))
+        self.transaction(|parser| {
+            let buff = repeat!(|| parser.choice(|tok| match tok {
+                Token::Whitespace(_) => None,
+                Token::Symbol(s)
+                    if matches!(
+                        s,
+                        // Symbol::Slash
+                        |Symbol::Backslash| Symbol::Colon
+                            | Symbol::Star
+                            | Symbol::Question
+                            | Symbol::Gt
+                            | Symbol::Lt
+                            | Symbol::Pipe
+                    ) =>
+                    None,
+                t => Some(t.as_str()),
+            }))
+            .concat();
+
+            if buff.is_empty() {
+                None
+            } else {
+                Some(ast::Word::from(buff))
+            }
+
+            // let res = parser.choice(|tok| tok.as_word().map(ast::Word::from))?;
+            // Some(res)
+        })
     }
 }

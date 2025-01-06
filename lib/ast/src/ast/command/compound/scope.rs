@@ -1,4 +1,4 @@
-use crate::INDENT;
+use crate::{parser_v2::Parser, tokens::Paren, INDENT};
 
 use super::CompoundBlock;
 use std::fmt::Write;
@@ -13,5 +13,18 @@ impl std::fmt::Display for Scope {
         writeln!(f)?;
         write!(f, "}}")?;
         Ok(())
+    }
+}
+
+impl Parser<'_> {
+    #[tracing::instrument(skip(self), ret)]
+    pub fn scope(&mut self) -> Option<Scope> {
+        self.transaction(|parser| {
+            parser.consume(Paren::curly_open())?;
+            let cmd = parser.compound_block()?;
+            parser.consume(Paren::curly_close())?;
+
+            Some(Scope(cmd))
+        })
     }
 }

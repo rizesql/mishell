@@ -1,4 +1,4 @@
-use crate::ast;
+use crate::{ast, one_of, parser_v2::Parser};
 
 mod arithmetic;
 pub mod compound;
@@ -26,5 +26,24 @@ impl std::fmt::Display for Command {
             }
             Command::Function() => todo!(),
         }
+    }
+}
+
+impl Parser<'_> {
+    #[tracing::instrument(skip(self), ret)]
+    pub fn command(&mut self) -> Option<Command> {
+        self.transaction(|parser| {
+            let res = one_of!(
+                parser,
+                || parser.simple_command().map(Command::Simple),
+                || {
+                    let cmd = parser.compound_command()?;
+                    let redirects = parser.redirects();
+                    Some(Command::Compound(cmd, redirects))
+                }
+            )?;
+
+            Some(res)
+        })
     }
 }

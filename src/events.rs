@@ -77,7 +77,9 @@ impl TraceEventConfig {
             .with_writer(std::io::stderr)
             .without_time()
             .with_target(false)
-            .with_filter(reload_filter);
+            .event_format(tracing_subscriber::fmt::format().compact())
+            .with_filter(reload_filter)
+            .with_filter(tracing_subscriber::filter::LevelFilter::DEBUG);
 
         if tracing_subscriber::registry()
             .with(layer)

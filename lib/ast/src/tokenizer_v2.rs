@@ -47,18 +47,18 @@ impl<I: Iterator<Item = char>> Lexer<I> {
         let token = match curr {
             '\n' => Token::NewLine,
             '!' => Token::Symbol(Symbol::Bang),
-            '#' => Token::Symbol(Symbol::Pound),
+            // '#' => Token::Symbol(Symbol::Pound),
             '*' => Token::Symbol(Symbol::Star),
             '?' => Token::Symbol(Symbol::Question),
-            '%' => Token::Symbol(Symbol::Percent),
-            '-' => Token::Symbol(Symbol::Dash),
-            '=' => Token::Symbol(Symbol::Equals),
+            // '%' => Token::Symbol(Symbol::Percent),
+            // '-' => Token::Symbol(Symbol::Dash),
+            '=' => Token::Symbol(Symbol::Eq),
             '+' => Token::Symbol(Symbol::Plus),
             ':' => Token::Symbol(Symbol::Colon),
-            '@' => Token::Symbol(Symbol::At),
-            '^' => Token::Symbol(Symbol::Caret),
-            '/' => Token::Symbol(Symbol::Slash),
-            ',' => Token::Symbol(Symbol::Comma),
+            // '@' => Token::Symbol(Symbol::At),
+            // '^' => Token::Symbol(Symbol::Caret),
+            // '/' => Token::Symbol(Symbol::Slash),
+            // ',' => Token::Symbol(Symbol::Comma),
 
             // Make sure that we treat the next token as a single character,
             // preventing multi-char tokens from being recognized. This is
@@ -66,11 +66,10 @@ impl<I: Iterator<Item = char>> Lexer<I> {
             // first & is a literal while the second retains its properties.
             // We will let the parser deal with what actually becomes a literal.
             '\\' => {
-                return Some(TokenOrLiteral::Escaped(
-                    self.inner
-                        .next()
-                        .and_then(|c| Lexer::new(std::iter::once(c)).next()),
-                ))
+                return Some(TokenOrLiteral::Escaped(self.inner.next().and_then(|c| {
+                    tracing::info!("Escaping {c}");
+                    Lexer::new(std::iter::once(c)).next()
+                })))
             }
 
             '\'' => Token::Quote(Quote::Single),
@@ -142,14 +141,13 @@ impl<I: Iterator<Item = char>> Lexer<I> {
                 buf.push(c);
 
                 while let Some(&c) = self.inner.peek() {
-                    if c.is_whitespace() && c != '\n' {
-                        self.inner.next();
-                        buf.push(c);
-                    } else {
+                    if !c.is_whitespace() || c == '\n' {
                         break;
                     }
-                }
 
+                    self.inner.next();
+                    buf.push(c);
+                }
                 Token::Whitespace(buf)
             }
 
@@ -164,51 +162,51 @@ impl<I: Iterator<Item = char>> Iterator for Lexer<I> {
     type Item = Token;
 
     fn next(&mut self) -> Option<Self::Item> {
-        fn word_first_char(c: char) -> bool {
+        fn name_first_char(c: char) -> bool {
             c == '_' || c.is_alphabetic()
         }
 
-        fn word_char(c: char) -> bool {
-            c.is_ascii_digit() || word_first_char(c)
+        fn name_char(c: char) -> bool {
+            c.is_ascii_digit() || name_first_char(c)
         }
 
-        match self.__next() {
+        let next = self.__next();
+        match next {
             None => None,
             Some(TokenOrLiteral::Token(t)) => Some(t),
             Some(TokenOrLiteral::Escaped(t)) => {
                 debug_assert_eq!(self.peeked, None);
                 self.peeked = t.map(TokenOrLiteral::Token);
-                Some(Token::Symbol(Symbol::Backslash))
+                None
             }
             Some(TokenOrLiteral::Literal(t)) => {
-                let is_word = word_first_char(t);
+                let is_name = name_first_char(t);
                 let mut word = String::new();
                 word.push(t);
 
                 loop {
                     match self.__next() {
-                        Some(tok @ TokenOrLiteral::Token(_))
-                        | Some(tok @ TokenOrLiteral::Escaped(_)) => {
+                        Some(tok @ TokenOrLiteral::Token(_)) => {
                             debug_assert_eq!(self.peeked, None);
                             self.peeked = Some(tok);
                             break;
                         }
-                        Some(TokenOrLiteral::Literal(c)) if is_word && !word_char(c) => {
-                            debug_assert_eq!(self.peeked, None);
-                            self.peeked = Some(TokenOrLiteral::Literal(c));
-                            return Some(Token::Word(word));
+                        Some(TokenOrLiteral::Escaped(t)) => {
+                            if let Some(t) = t {
+                                word.push_str(t.as_str());
+                            }
                         }
+                        // Some(TokenOrLiteral::Literal(c)) if is_name && !name_char(c) => {
+                        //     debug_assert_eq!(self.peeked, None);
+                        //     self.peeked = Some(TokenOrLiteral::Literal(c));
+                        //     return Some(Token::Word(word));
+                        // }
                         Some(TokenOrLiteral::Literal(c)) => word.push(c),
                         None => break,
                     }
                 }
 
-                Some(if is_word {
-                    Token::Word(word)
-                } else {
-                    // Token::Literal(word)
-                    Token::Word(word)
-                })
+                Some(Token::Word(word))
             }
         }
     }

@@ -1,4 +1,4 @@
-use crate::ast;
+use crate::{ast, delimited_repeat, one_of, parser_v2::Parser, repeat, tokens::Symbol};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Pipeline {
@@ -25,6 +25,34 @@ impl std::fmt::Display for Pipeline {
     }
 }
 
+impl Parser<'_> {
+    #[tracing::instrument(skip(self), ret)]
+    pub fn pipeline(&mut self) -> Option<Pipeline> {
+        self.transaction(|parser| {
+            let bang = parser.consume(Symbol::Bang).is_some();
+            let seq = parser.command_seq()?;
+            let res = Pipeline { bang, seq };
+
+            Some(res)
+        })
+    }
+
+    #[tracing::instrument(skip(self), ret)]
+    fn command_seq(&mut self) -> Option<Vec<ast::Command>> {
+        self.transaction(|parser| {
+            delimited_repeat!(|| parser.command(), || parser.pipeline_separator())
+        })
+    }
+
+    #[tracing::instrument(skip(self), ret)]
+    fn pipeline_separator(&mut self) -> Option<()> {
+        self.transaction(|parser| {
+            parser.consume(Symbol::Pipe)?;
+            parser.linebreak()
+        })
+    }
+}
+
 /// Represents a sequence of command pipelines connected through boolean operations
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PipelineSeq {
@@ -44,6 +72,19 @@ impl std::fmt::Display for PipelineSeq {
     }
 }
 
+impl Parser<'_> {
+    #[tracing::instrument(skip(self), ret)]
+    pub fn pipeline_seq(&mut self) -> Option<PipelineSeq> {
+        self.transaction(|parser| {
+            let head = parser.pipeline()?;
+            let rest = repeat!(|| parser.seq_step());
+
+            let res = PipelineSeq { head, rest };
+            Some(res)
+        })
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SeqStep {
     And(Pipeline),
@@ -56,5 +97,33 @@ impl std::fmt::Display for SeqStep {
             SeqStep::And(p) => write!(f, " && {p}"),
             SeqStep::Or(p) => write!(f, " || {p}"),
         }
+    }
+}
+
+impl Parser<'_> {
+    #[tracing::instrument(skip(self), ret)]
+    fn seq_step(&mut self) -> Option<SeqStep> {
+        self.transaction(|parser| one_of!(parser, || parser.or_step(), || parser.and_step()))
+    }
+
+    #[tracing::instrument(skip(self), ret)]
+    fn or_step(&mut self) -> Option<SeqStep> {
+        self.transaction(|parser| {
+            parser.consume(Symbol::Or)?;
+            let pipeline = parser.pipeline()?;
+            let res = SeqStep::Or(pipeline);
+
+            Some(res)
+        })
+    }
+
+    #[tracing::instrument(skip(self), ret)]
+    fn and_step(&mut self) -> Option<SeqStep> {
+        self.transaction(|parser| {
+            parser.consume(Symbol::And)?;
+            let pipeline = parser.pipeline()?;
+            let res = SeqStep::And(pipeline);
+            Some(res)
+        })
     }
 }

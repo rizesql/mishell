@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::{fmt::write, str::FromStr};
 
 /// Inner representation of a positional param.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -26,7 +26,7 @@ pub enum Positional {
 }
 
 impl Positional {
-    fn as_str(&self) -> &str {
+    pub fn as_str(&self) -> &str {
         match self {
             Positional::Zero => "$0",
             Positional::One => "$1",
@@ -110,7 +110,57 @@ pub struct Paren {
 }
 
 impl Paren {
-    fn as_str(&self) -> &str {
+    /// Open paren (`(`)
+    pub fn open() -> Self {
+        Paren {
+            kind: ParenKind::Normal,
+            pos: ParenPos::Open,
+        }
+    }
+
+    /// Close paren (`)`)
+    pub fn close() -> Self {
+        Paren {
+            kind: ParenKind::Normal,
+            pos: ParenPos::Close,
+        }
+    }
+
+    /// Open curly paren (`{`)
+    pub fn curly_open() -> Self {
+        Paren {
+            kind: ParenKind::Curly,
+            pos: ParenPos::Open,
+        }
+    }
+
+    /// Close curly paren (`}`)
+    pub fn curly_close() -> Self {
+        Paren {
+            kind: ParenKind::Curly,
+            pos: ParenPos::Close,
+        }
+    }
+
+    /// Open square paren (`[`)
+    pub fn square_open() -> Self {
+        Paren {
+            kind: ParenKind::Square,
+            pos: ParenPos::Open,
+        }
+    }
+
+    /// Close square paren (`]`)
+    pub fn square_close() -> Self {
+        Paren {
+            kind: ParenKind::Square,
+            pos: ParenPos::Close,
+        }
+    }
+}
+
+impl Paren {
+    pub fn as_str(&self) -> &str {
         match (self.kind, self.pos) {
             (ParenKind::Normal, ParenPos::Open) => "(",
             (ParenKind::Normal, ParenPos::Close) => ")",
@@ -144,12 +194,18 @@ pub enum Quote {
 }
 
 impl Quote {
-    fn as_str(&self) -> &str {
+    pub fn as_str(&self) -> &str {
         match self {
             Quote::Single => "'",
             Quote::Double => "\"",
             Quote::Backtick => "`",
         }
+    }
+}
+
+impl std::fmt::Display for Quote {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_str())
     }
 }
 
@@ -172,7 +228,7 @@ pub enum Symbol {
     /// \-
     Dash,
     /// \=
-    Equals,
+    Eq,
     /// \+
     Plus,
     /// \:
@@ -230,7 +286,7 @@ impl Symbol {
             Symbol::Backslash => "\\",
             Symbol::Percent => "%",
             Symbol::Dash => "-",
-            Symbol::Equals => "=",
+            Symbol::Eq => "=",
             Symbol::Plus => "+",
             Symbol::Colon => ":",
             Symbol::At => "@",
@@ -257,12 +313,6 @@ impl Symbol {
     }
 }
 
-impl From<Symbol> for Token {
-    fn from(value: Symbol) -> Self {
-        Self::Symbol(value)
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Token {
     NewLine,
@@ -275,6 +325,30 @@ pub enum Token {
     Word(String),
 }
 
+impl From<Symbol> for Token {
+    fn from(value: Symbol) -> Self {
+        Self::Symbol(value)
+    }
+}
+
+impl From<Quote> for Token {
+    fn from(value: Quote) -> Self {
+        Self::Quote(value)
+    }
+}
+
+impl From<Paren> for Token {
+    fn from(value: Paren) -> Self {
+        Self::Paren(value)
+    }
+}
+
+impl<T: Into<String>> From<T> for Token {
+    fn from(value: T) -> Self {
+        Self::Word(value.into())
+    }
+}
+
 impl std::fmt::Display for Token {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.as_str())
@@ -282,7 +356,7 @@ impl std::fmt::Display for Token {
 }
 
 impl Token {
-    fn as_str(&self) -> &str {
+    pub fn as_str(&self) -> &str {
         match self {
             Token::NewLine => "\n",
             Token::Paren(paren) => paren.as_str(),
@@ -295,14 +369,14 @@ impl Token {
         }
     }
 
-    pub fn is_word(&self) -> Option<String> {
+    pub fn as_word(&self) -> Option<String> {
         match self {
             Token::Word(w) => Some(w.to_owned()),
             _ => None,
         }
     }
 
-    pub fn is_symbol(&self) -> Option<Symbol> {
+    pub fn as_symbol(&self) -> Option<Symbol> {
         match self {
             Token::Symbol(s) => Some(*s),
             _ => None,

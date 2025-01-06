@@ -1,4 +1,8 @@
-use crate::ast::command::compound::DoScope;
+use crate::{
+    ast::command::compound::DoScope,
+    parser_v2::Parser,
+    tokens::{Paren, Symbol},
+};
 
 use super::UnexpandedExpr;
 
@@ -7,7 +11,7 @@ pub struct For {
     init: Option<UnexpandedExpr>,
     cond: Option<UnexpandedExpr>,
     post: Option<UnexpandedExpr>,
-    block: DoScope,
+    scope: DoScope,
 }
 
 impl std::fmt::Display for For {
@@ -32,6 +36,36 @@ impl std::fmt::Display for For {
 
         write!(f, "))")?;
 
-        write!(f, "{}", self.block)
+        write!(f, "{}", self.scope)
+    }
+}
+
+impl Parser<'_> {
+    #[tracing::instrument(skip(self), ret)]
+    pub fn arithmetic_for_clause(&mut self) -> Option<For> {
+        self.transaction(|parser| {
+            parser.consume("for")?;
+            parser.consume(Paren::open())?;
+            parser.consume(Paren::open())?;
+
+            let init = parser.arithmetic_expr();
+            parser.consume(Symbol::Semicolon)?;
+            let cond = parser.arithmetic_expr();
+            parser.consume(Symbol::Semicolon)?;
+            let post = parser.arithmetic_expr();
+
+            parser.consume(Paren::close())?;
+            parser.consume(Paren::close())?;
+
+            parser.seq_separator()?;
+            let scope = parser.do_scope()?;
+
+            Some(For {
+                init,
+                cond,
+                post,
+                scope,
+            })
+        })
     }
 }
