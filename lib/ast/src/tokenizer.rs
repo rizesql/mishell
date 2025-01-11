@@ -23,6 +23,7 @@ pub fn tokenizer(input: String) -> Vec<Token> {
     let mut is_string = false;
 
     for character in input.chars() {
+        println!("{}",character);
         match character {
             '"' => {
                 is_string = !is_string;
