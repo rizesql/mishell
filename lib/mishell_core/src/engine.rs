@@ -1,5 +1,9 @@
 use std::path::PathBuf;
 
+use ast::tokenizer::{debug_tokens, tokenizer};
+
+use ast::parser;
+
 use crate::{exec, Error};
 
 #[derive(Debug, Clone)]
@@ -25,17 +29,23 @@ impl Engine {
     }
 
     pub fn run(&mut self, command: String) -> Result<exec::ExitCode, Error> {
-        let lexer = ast::tokenizer_v2::Lexer::new(command.chars());
-        let tokens = lexer.collect::<Vec<_>>();
+        // let lexer = ast::tokenizer_v2::Lexer::new(command.chars());
+        let tokens = tokenizer(command);
+        // let tokens = lexer.collect::<Vec<_>>();
 
-        let mut parser = ast::parser_v2::Parser::new(tokens.as_slice());
-        tracing::info!("{:?}", tokens);
+        debug_tokens(&tokens);
 
-        if let Some(p) = parser.program() {
-            tracing::info!("PROGRAM: \n{p}  \n{:?}", p);
-        }
+        let mut parser = parser::Parser::new(tokens);
 
-        tracing::info!("left {:?}", parser.remaining());
+        let ast = parser.parse().expect("Failed to parse nigger");
+
+
+        println!("{:#?}", ast);
+
+        // let mut parser = ast::parser_v2::Parser::new(tokens.as_slice());
+        // tracing::info!("{:?}", tokens);
+
+       
         Ok(exec::ExitCode::success())
     }
 }

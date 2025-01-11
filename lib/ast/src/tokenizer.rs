@@ -16,7 +16,7 @@ pub enum Token {
     Comment(String),
 }
 
-pub fn tokenizer(input: &str) -> Vec<Token> {
+pub fn tokenizer(input: String) -> Vec<Token> {
     let mut tokens = Vec::new();
     let mut current_token = String::new();
 
