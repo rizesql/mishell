@@ -23,7 +23,6 @@ pub fn tokenizer(input: String) -> Vec<Token> {
     let mut is_string = false;
 
     for character in input.chars() {
-        println!("{}",character);
         match character {
             '"' => {
                 is_string = !is_string;
@@ -47,6 +46,11 @@ pub fn tokenizer(input: String) -> Vec<Token> {
 
             _ => current_token.push(character),
         }
+    }
+    
+    if !current_token.is_empty() {
+        tokens.push(clasify_tokens(&current_token));
+        current_token.clear();
     }
 
     tokens
