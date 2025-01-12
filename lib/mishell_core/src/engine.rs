@@ -2,6 +2,7 @@ use std::io::Write;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
+use crate::variable_manager::VariableManager;
 use crate::{exec, Error};
 use ast::parser::{self, ASTNode};
 use ast::tokenizer::{debug_tokens, tokenizer};
@@ -10,6 +11,7 @@ use ast::tokenizer::{debug_tokens, tokenizer};
 pub struct Engine {
     pub working_dir: PathBuf,
     last_exit_status: u8,
+    varable_manager: VariableManager,
 }
 
 impl Engine {
@@ -17,6 +19,7 @@ impl Engine {
         Ok(Self {
             working_dir: std::env::current_dir()?,
             last_exit_status: 0,
+            varable_manager: VariableManager::new(),
         })
     }
 
@@ -114,9 +117,11 @@ impl Engine {
                 body,
             } => {
                 for value in values {
-                    std::env::set_var(variable, value);
+                    // std::env::set_var(variable, value);
+                    self.varable_manager.set_var(variable, value);
                     self.execute(body)?;
                 }
+                self.varable_manager.remove_var(variable);
                 Ok(())
             }
             ASTNode::IfCondition {
@@ -136,6 +141,10 @@ impl Engine {
     }
 
     fn execute_command(&mut self, name: &str, args: &[String]) -> Result<(), String> {
+        let mut args = args.to_vec();
+        self.varable_manager.replace_vars_in_args(&mut args);
+        tracing::info!("{:?}", args);
+
         if name == "exec" {
             if args.is_empty() {
                 return Err("No command provided for 'exec'".to_string());
