@@ -1,13 +1,10 @@
 use std::io::Write;
 use std::path::PathBuf;
+use std::process::{Command, Stdio};
 
 use ast::tokenizer::{debug_tokens, tokenizer};
-
 use ast::parser::{self, ASTNode};
-
 use crate::{exec, Error};
-
-use std::process::{Command, Stdio};
 
 #[derive(Debug, Clone)]
 pub struct Engine {
@@ -32,46 +29,35 @@ impl Engine {
     }
 
     pub fn run(&mut self, command: String) -> Result<exec::ExitCode, Error> {
-        // let lexer = ast::tokenizer_v2::Lexer::new(command.chars());
         let tokens = tokenizer(command);
-        // let tokens = lexer.collect::<Vec<_>>();
-
         debug_tokens(&tokens);
 
         let mut parser = parser::Parser::new(tokens);
-
-        let ast = parser.parse().expect("Failed to parse nigger");
-
-
+        let ast = parser.parse().expect("Failed to parse command");
 
         println!("{:#?}", ast);
 
+        let _ = self.execute(&ast);
 
-        let _ = Engine::execute(&ast);
-
-        // let mut parser = ast::parser_v2::Parser::new(tokens.as_slice());
-        // tracing::info!("{:?}", tokens);
-
-       
         Ok(exec::ExitCode::success())
     }
 
-    pub fn execute(ast: &ASTNode) -> Result<(), String> {
+    pub fn execute(&mut self, ast: &ASTNode) -> Result<(), String> {
         match ast {
-            ASTNode::Command { name, args } => Self::execute_command(name, args),
+            ASTNode::Command { name, args } => self.execute_command(name, args),
             ASTNode::Sequence(nodes) => {
                 for node in nodes {
-                    Self::execute(node)?;
+                    self.execute(node)?;
                 }
                 Ok(())
             }
             ASTNode::Pipeline { left, right } => {
-                let left_output = Self::capture_output(left)?;
-                Self::execute_with_input(right, left_output)
+                let left_output = self.capture_output(left)?;
+                self.execute_with_input(right, left_output)
             }
             ASTNode::Redirection { command, file, direction } => {
                 let mut cmd = Command::new("sh");
-                cmd.arg("-c").arg(Self::to_shell_command(command)?);
+                cmd.arg("-c").arg(self.to_shell_command(command)?);
 
                 match direction.as_str() {
                     ">" => {
@@ -87,12 +73,12 @@ impl Engine {
                 Ok(())
             }
             ASTNode::Logical { left, right, operator } => {
-                let left_result = Self::execute(left);
+                let left_result = self.execute(left);
 
                 match operator.as_str() {
                     "&&" => {
                         if left_result.is_ok() {
-                            Self::execute(right)
+                            self.execute(right)
                         } else {
                             left_result
                         }
@@ -101,7 +87,7 @@ impl Engine {
                         if left_result.is_ok() {
                             Ok(())
                         } else {
-                            Self::execute(right)
+                            self.execute(right)
                         }
                     }
                     _ => Err(format!("Unknown logical operator: {}", operator)),
@@ -110,15 +96,15 @@ impl Engine {
             ASTNode::ForLoop { variable, values, body } => {
                 for value in values {
                     std::env::set_var(variable, value);
-                    Self::execute(body)?;
+                    self.execute(body)?;
                 }
                 Ok(())
             }
             ASTNode::IfCondition { condition, then_branch, else_branch } => {
-                if Self::execute(condition).is_ok() {
-                    Self::execute(then_branch)
+                if self.execute(condition).is_ok() {
+                    self.execute(then_branch)
                 } else if let Some(else_branch) = else_branch {
-                    Self::execute(else_branch)
+                    self.execute(else_branch)
                 } else {
                     Ok(())
                 }
@@ -126,7 +112,17 @@ impl Engine {
         }
     }
 
-    fn execute_command(name: &str, args: &[String]) -> Result<(), String> {
+    fn execute_command(&mut self, name: &str, args: &[String]) -> Result<(), String> {
+        if name == "cd" {
+            if args.len() != 1 {
+                return Err("cd requires exactly one argument".to_string());
+            }
+            let path = &args[0];
+            std::env::set_current_dir(path).map_err(|e| format!("Failed to change directory: {}", e))?;
+            self.working_dir = std::env::current_dir().map_err(|e| format!("Failed to get current directory: {}", e))?;
+            return Ok(());
+        }
+
         let mut cmd = Command::new(name);
         cmd.args(args);
         cmd.status()
@@ -134,16 +130,16 @@ impl Engine {
             .map(|_| ())
     }
 
-    fn capture_output(ast: &ASTNode) -> Result<Vec<u8>, String> {
+    fn capture_output(&mut self, ast: &ASTNode) -> Result<Vec<u8>, String> {
         let mut cmd = Command::new("sh");
-        cmd.arg("-c").arg(Self::to_shell_command(ast)?);
+        cmd.arg("-c").arg(self.to_shell_command(ast)?);
         let output = cmd.output().map_err(|e| e.to_string())?;
         Ok(output.stdout)
     }
 
-    fn execute_with_input(ast: &ASTNode, input: Vec<u8>) -> Result<(), String> {
+    fn execute_with_input(&mut self, ast: &ASTNode, input: Vec<u8>) -> Result<(), String> {
         let mut cmd = Command::new("sh");
-        cmd.arg("-c").arg(Self::to_shell_command(ast)?);
+        cmd.arg("-c").arg(self.to_shell_command(ast)?);
         cmd.stdin(Stdio::piped());
         cmd.stdout(Stdio::inherit());
         let mut child = cmd.spawn().map_err(|e| e.to_string())?;
@@ -154,13 +150,27 @@ impl Engine {
         Ok(())
     }
 
-    fn to_shell_command(ast: &ASTNode) -> Result<String, String> {
+    fn to_shell_command(&self, ast: &ASTNode) -> Result<String, String> {
         match ast {
             ASTNode::Command { name, args } => {
                 let args_str = args.join(" ");
                 Ok(format!("{} {}", name, args_str))
             }
-            _ => Err("Only command nodes can be converted to shell commands".to_string()),
+            ASTNode::Pipeline { left, right } => {
+                let left_cmd = self.to_shell_command(left)?;
+                let right_cmd = self.to_shell_command(right)?;
+                Ok(format!("{} | {}", left_cmd, right_cmd))
+            }
+            ASTNode::Redirection { command, file, direction } => {
+                let cmd_str = self.to_shell_command(command)?;
+                let redirection = match direction.as_str() {
+                    ">" => format!("{} > {}", cmd_str, file),
+                    "<" => format!("{} < {}", cmd_str, file),
+                    _ => return Err(format!("Unknown redirection direction: {}", direction)),
+                };
+                Ok(redirection)
+            }
+            _ => Err("Unsupported AST node type for shell command".to_string()),
         }
     }
 }
