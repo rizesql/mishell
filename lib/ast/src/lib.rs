@@ -1,4 +1,5 @@
 pub mod ast;
+pub mod executables_cache;
 mod lexer;
 pub mod parser;
 pub mod parser_v2;

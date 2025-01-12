@@ -2,9 +2,9 @@ use std::io::Write;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
-use ast::tokenizer::{debug_tokens, tokenizer};
-use ast::parser::{self, ASTNode};
 use crate::{exec, Error};
+use ast::parser::{self, ASTNode};
+use ast::tokenizer::{debug_tokens, tokenizer};
 
 #[derive(Debug, Clone)]
 pub struct Engine {
@@ -28,14 +28,15 @@ impl Engine {
         self.last_exit_status = exit_status;
     }
 
-    pub fn run(&mut self, command: String) -> Result<exec::ExitCode, Error> {
-        let tokens = tokenizer(command);
+    pub async fn run(&mut self, command: String) -> Result<exec::ExitCode, Error> {
+        let tokens = tokenizer(command).await;
         debug_tokens(&tokens);
 
         let mut parser = parser::Parser::new(tokens);
 
-        let ast = parser.parse().map_err(|_| std::io::Error::new(std::io::ErrorKind::Other, "Failed to parse command"))?;
-
+        let ast = parser.parse().map_err(|_| {
+            std::io::Error::new(std::io::ErrorKind::Other, "Failed to parse command")
+        })?;
 
         println!("{:#?}", ast);
 
@@ -167,8 +168,10 @@ impl Engine {
                 return Err("cd requires exactly one argument".to_string());
             }
             let path = &args[0];
-            std::env::set_current_dir(path).map_err(|e| format!("Failed to change directory: {}", e))?;
-            self.working_dir = std::env::current_dir().map_err(|e| format!("Failed to get current directory: {}", e))?;
+            std::env::set_current_dir(path)
+                .map_err(|e| format!("Failed to change directory: {}", e))?;
+            self.working_dir = std::env::current_dir()
+                .map_err(|e| format!("Failed to get current directory: {}", e))?;
             return Ok(());
         }
 
@@ -217,7 +220,11 @@ impl Engine {
                 let right_cmd = self.to_shell_command(right)?;
                 Ok(format!("{} | {}", left_cmd, right_cmd))
             }
-            ASTNode::Redirection { command, file, direction } => {
+            ASTNode::Redirection {
+                command,
+                file,
+                direction,
+            } => {
                 let cmd_str = self.to_shell_command(command)?;
                 let redirection = match direction.as_str() {
                     ">" => format!("{} > {}", cmd_str, file),

@@ -1,5 +1,7 @@
 use regex::Regex;
 
+use crate::executables_cache::EXECUTABLES_CACHE;
+
 #[derive(Debug, PartialEq, Clone)]
 pub enum Token {
     Keyword(String),    // for, if
@@ -16,7 +18,7 @@ pub enum Token {
     Comment(String),
 }
 
-pub fn tokenizer(input: String) -> Vec<Token> {
+pub async fn tokenizer(input: String) -> Vec<Token> {
     let mut tokens = Vec::new();
     let mut current_token = String::new();
 
@@ -32,13 +34,13 @@ pub fn tokenizer(input: String) -> Vec<Token> {
                 if is_string {
                     current_token.push(character);
                 } else if !current_token.is_empty() {
-                    tokens.push(clasify_tokens(&current_token));
+                    tokens.push(clasify_tokens(&current_token).await);
                     current_token.clear();
                 }
             }
             ';' => {
                 if !current_token.is_empty() {
-                    tokens.push(clasify_tokens(&current_token));
+                    tokens.push(clasify_tokens(&current_token).await);
                     current_token.clear();
                 }
                 current_token.push(character);
@@ -47,19 +49,27 @@ pub fn tokenizer(input: String) -> Vec<Token> {
             _ => current_token.push(character),
         }
     }
-    
+
     if !current_token.is_empty() {
-        tokens.push(clasify_tokens(&current_token));
+        tokens.push(clasify_tokens(&current_token).await);
         current_token.clear();
     }
 
     tokens
 }
 
-pub fn clasify_tokens(token: &str) -> Token {
+pub async fn clasify_tokens(token: &str) -> Token {
     let int_regex = Regex::new(r"^[+-]?\d+$").unwrap();
     let float_regex = Regex::new(r"^[+-]?(\d+\.\d*|\.\d+)$").unwrap();
     let string_regex = Regex::new(r#"^"([^"\\]|\\.)*"$"#).unwrap();
+
+    // Aici se caută token-ul în cache
+    let cache = EXECUTABLES_CACHE.clone();
+    // tracing::info!("command {} is in cache lookup", token);
+    if cache.lookup(token).await {
+        tracing::info!("command {} is in cache lookup", token);
+        return Token::Command(token.to_string()); // If found in cache, classify as command
+    }
 
     match token {
         _ if int_regex.is_match(token) => Token::IntegerLiteral(token.to_string()),

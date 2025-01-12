@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use ast::executables_cache::EXECUTABLES_CACHE;
 use mishell_core::exec;
 use nu_ansi_term::{Color, Style};
 use reedline::MenuBuilder;
@@ -83,12 +84,19 @@ impl Mishell {
         Ok(())
     }
 
-    fn run_once(&mut self) -> Result<ExecutionResult, Error> {
+    #[tokio::main]
+    async fn run_once(&mut self) -> Result<ExecutionResult, Error> {
+        // Aici se face cache la executabilele din path
+        let cache = EXECUTABLES_CACHE.clone();
+        tokio::spawn(async move {
+            cache.populate_cache().await;
+        });
+
         match self.reedline.read_line(&reedline::DefaultPrompt::default()) {
             Ok(reedline::Signal::Success(cmd)) => {
                 tracing::info!("{cmd}");
 
-                self.engine_mut().as_mut().run(cmd)?;
+                self.engine_mut().as_mut().run(cmd).await?;
 
                 Ok(ExecutionResult::Executed(exec::ExitCode::success()))
             }
