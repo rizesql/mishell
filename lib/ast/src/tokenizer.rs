@@ -1,5 +1,7 @@
 use regex::Regex;
 
+use crate::executables_cache::EXECUTABLES_CACHE;
+
 #[derive(Debug, PartialEq, Clone)]
 pub enum Token {
     Keyword(String),    // for, if
@@ -16,7 +18,7 @@ pub enum Token {
     Comment(String),
 }
 
-pub fn tokenizer(input: &str) -> Vec<Token> {
+pub async fn tokenizer(input: String) -> Vec<Token> {
     let mut tokens = Vec::new();
     let mut current_token = String::new();
 
@@ -32,13 +34,13 @@ pub fn tokenizer(input: &str) -> Vec<Token> {
                 if is_string {
                     current_token.push(character);
                 } else if !current_token.is_empty() {
-                    tokens.push(clasify_tokens(&current_token));
+                    tokens.push(clasify_tokens(&current_token, &tokens).await);
                     current_token.clear();
                 }
             }
             ';' => {
                 if !current_token.is_empty() {
-                    tokens.push(clasify_tokens(&current_token));
+                    tokens.push(clasify_tokens(&current_token, &tokens).await);
                     current_token.clear();
                 }
                 current_token.push(character);
@@ -48,13 +50,23 @@ pub fn tokenizer(input: &str) -> Vec<Token> {
         }
     }
 
+    if !current_token.is_empty() {
+        tokens.push(clasify_tokens(&current_token, &tokens).await);
+        current_token.clear();
+    }
+
     tokens
 }
 
-pub fn clasify_tokens(token: &str) -> Token {
+pub async fn clasify_tokens(token: &str, tokens_list: &Vec<Token>) -> Token {
     let int_regex = Regex::new(r"^[+-]?\d+$").unwrap();
     let float_regex = Regex::new(r"^[+-]?(\d+\.\d*|\.\d+)$").unwrap();
     let string_regex = Regex::new(r#"^"([^"\\]|\\.)*"$"#).unwrap();
+
+    // Aici se caută token-ul în cache
+    if let Some(token) = get_command_from_cache(token, tokens_list).await {
+        return token;
+    }
 
     match token {
         _ if int_regex.is_match(token) => Token::IntegerLiteral(token.to_string()),
@@ -68,10 +80,27 @@ pub fn clasify_tokens(token: &str) -> Token {
         "true" | "false" => Token::BooleanLiteral(token.to_string()),
         _ if token.starts_with('$') => Token::Value(token.to_string()),
         " " | "\n" | "\t" => Token::Whitespace(token.to_string()),
-        "ls" | "echo" | "grep" | "cat" | "find" | "cd" | "mv" | "rm" | "mkdir" | "exec"
-        | "exit" => Token::Command(token.to_string()),
+        // "ls" | "echo" | "grep" | "cat" | "find" | "cd" | "mv" | "rm" | "mkdir" | "exec"
+        // | "exit" => Token::Command(token.to_string()),
         _ => Token::Value(token.to_string()),
     }
+}
+
+async fn get_command_from_cache(token: &str, tokens_list: &Vec<Token>) -> Option<Token> {
+    let cache = EXECUTABLES_CACHE.clone();
+    if cache.lookup(token).await {
+        tracing::info!("command {} is in cache lookup", token);
+        match tokens_list.last() {
+            Some(last_token) => match last_token {
+                Token::Keyword(keyword) if keyword != "for" => {
+                    return Some(Token::Command(token.into())); // If found in cache, classify as command
+                }
+                _ => {}
+            },
+            None => return Some(Token::Command(token.into())), // If found in cache, classify as command
+        }
+    }
+    None
 }
 
 pub fn debug_tokens(tokens: &[Token]) {

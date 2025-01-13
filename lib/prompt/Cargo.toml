@@ -8,6 +8,7 @@ edition = "2021"
 
 [dependencies]
 mishell_core = { path = "../mishell_core", version = "*" }
+ast = { path = "../ast", version = "*" }
 
 miette = { workspace = true }
 nix = { workspace = true }

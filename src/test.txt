@@ -20,7 +20,7 @@ for file in *.txt; do echo $file; done
 
 for file in *.txt; do cat $file | grep "error"; done
 
-for file in *.txt; do grep "error" $file > errors.txt; done
+for fil in *.txt; do grep "error" $fil > errors.txt; done
 
 if ls file.txt; then echo "File exists"; fi
 

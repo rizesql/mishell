@@ -1,0 +1,6 @@
+there is a test
+where every line
+is outputed
+if it contains the word test
+test
+error
