@@ -116,9 +116,13 @@ impl Engine {
                 values,
                 body,
             } => {
-                for value in values {
+                let for_values = self.varable_manager.map_for_values(values).expect("");
+
+                tracing::info!("For values {:?}", for_values);
+
+                for value in for_values.iter() {
                     // std::env::set_var(variable, value);
-                    self.varable_manager.set_var(variable, value);
+                    self.varable_manager.set_var(variable, &value);
                     self.execute(body)?;
                 }
                 self.varable_manager.remove_var(variable);
@@ -143,7 +147,7 @@ impl Engine {
     fn execute_command(&mut self, name: &str, args: &[String]) -> Result<(), String> {
         let mut args = args.to_vec();
         self.varable_manager.replace_vars_in_args(&mut args);
-        tracing::info!("{:?}", args);
+        // tracing::info!("{:?}", args);
 
         if name == "exec" {
             if args.is_empty() {
@@ -218,9 +222,12 @@ impl Engine {
         Ok(())
     }
 
-    fn to_shell_command(&self, ast: &ASTNode) -> Result<String, String> {
+    fn to_shell_command(&mut self, ast: &ASTNode) -> Result<String, String> {
         match ast {
             ASTNode::Command { name, args } => {
+                let mut args = args.to_vec();
+                self.varable_manager.replace_vars_in_args(&mut args);
+
                 let args_str = args.join(" ");
                 Ok(format!("{} {}", name, args_str))
             }

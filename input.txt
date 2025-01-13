@@ -3,3 +3,4 @@ where every line
 is outputed
 if it contains the word test
 test
+error
