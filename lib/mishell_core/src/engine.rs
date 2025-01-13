@@ -1,6 +1,6 @@
 use std::io::Write;
 use std::path::PathBuf;
-use std::process::{Command, Stdio};
+use std::process::{exit, Command, Stdio};
 
 use crate::variable_manager::VariableManager;
 use crate::{exec, Error};
@@ -149,57 +149,64 @@ impl Engine {
         self.varable_manager.replace_vars_in_args(&mut args);
         // tracing::info!("{:?}", args);
 
-        if name == "exec" {
-            if args.is_empty() {
-                return Err("No command provided for 'exec'".to_string());
-            }
-
-            let mut cmd = Command::new(&args[0]);
-            cmd.args(&args[1..]);
-
-            let mut child = cmd
-                .spawn()
-                .map_err(|e| format!("Failed to execute command '{}': {}", args[0], e))?;
-
-            return child
-                .wait()
-                .map(|status| {
-                    if status.success() {
-                        Ok(())
-                    } else {
-                        Err(format!(
-                            "Command '{}' exited with status: {}",
-                            args[0], status
-                        ))
-                    }
-                })
-                .unwrap_or_else(|e| {
-                    Err(format!("Failed to wait for command '{}': {}", args[0], e))
-                });
-        } else if name == "cd" {
-            if args.len() != 1 {
-                return Err("cd requires exactly one argument".to_string());
-            }
-            let path = &args[0];
-            std::env::set_current_dir(path)
-                .map_err(|e| format!("Failed to change directory: {}", e))?;
-            self.working_dir = std::env::current_dir()
-                .map_err(|e| format!("Failed to get current directory: {}", e))?;
-            return Ok(());
-        }
-
-        let mut cmd = Command::new(name);
-        cmd.args(args);
-        cmd.status()
-            .map_err(|e| format!("Failed to execute command '{}': {}", name, e))
-            .map(|status| {
-                if status.success() {
-                    Ok(())
-                } else {
-                    Err(format!("Command '{}' exited with status: {}", name, status))
+        match name {
+            "exec" => {
+                if args.is_empty() {
+                    return Err("No command provided for 'exec'".to_string());
                 }
-            })
-            .unwrap_or_else(|e| Err(format!("Failed to execute '{}': {}", name, e)))
+
+                let mut cmd = Command::new(&args[0]);
+                cmd.args(&args[1..]);
+
+                let mut child = cmd
+                    .spawn()
+                    .map_err(|e| format!("Failed to execute command '{}': {}", args[0], e))?;
+
+                return child
+                    .wait()
+                    .map(|status| {
+                        if status.success() {
+                            Ok(())
+                        } else {
+                            Err(format!(
+                                "Command '{}' exited with status: {}",
+                                args[0], status
+                            ))
+                        }
+                    })
+                    .unwrap_or_else(|e| {
+                        Err(format!("Failed to wait for command '{}': {}", args[0], e))
+                    });
+            }
+            "cd" => {
+                if args.len() != 1 {
+                    return Err("cd requires exactly one argument".to_string());
+                }
+                let path = &args[0];
+                std::env::set_current_dir(path)
+                    .map_err(|e| format!("Failed to change directory: {}", e))?;
+                self.working_dir = std::env::current_dir()
+                    .map_err(|e| format!("Failed to get current directory: {}", e))?;
+                return Ok(());
+            }
+            "exit" => {
+                exit(0);
+            }
+            _ => {
+                let mut cmd = Command::new(name);
+                cmd.args(args);
+                cmd.status()
+                    .map_err(|e| format!("Failed to execute command '{}': {}", name, e))
+                    .map(|status| {
+                        if status.success() {
+                            Ok(())
+                        } else {
+                            Err(format!("Command '{}' exited with status: {}", name, status))
+                        }
+                    })
+                    .unwrap_or_else(|e| Err(format!("Failed to execute '{}': {}", name, e)))
+            }
+        }
     }
 
     fn capture_output(&mut self, ast: &ASTNode) -> Result<Vec<u8>, String> {
