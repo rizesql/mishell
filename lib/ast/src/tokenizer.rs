@@ -95,6 +95,8 @@ async fn get_command_from_cache(token: &str, tokens_list: &Vec<Token>) -> Option
                 Token::Keyword(keyword) if keyword != "for" => {
                     return Some(Token::Command(token.into())); // If found in cache, classify as command
                 }
+                Token::Separator(keyword)=> {return Some(Token::Command(token.into()))}
+                Token::Operator(keyword)=> {return Some(Token::Command(token.into()))}
                 _ => {}
             },
             None => return Some(Token::Command(token.into())), // If found in cache, classify as command

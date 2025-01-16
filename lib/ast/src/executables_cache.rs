@@ -43,6 +43,8 @@ impl ExecutablesCache {
         tracing::info!("Populating executable cache...");
         let mut cache = self.cache.lock().await;
         cache.insert("exit".to_string());
+        cache.insert("cd".to_string());
+        cache.insert("exec".to_string());
 
         if let Ok(path) = env::var("PATH") {
             for dir in path.split(':') {

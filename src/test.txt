@@ -26,12 +26,12 @@ if ls file.txt; then echo "File exists"; fi
 
 if ls file.txt && grep "pattern" file.txt; then echo "Patern found"; else echo "Patter not found"; fi
 
-for file in *.txt; do if grep "error" $file; then echo "$echo_contains_errors"; fi; done
+for file in *.txt; do if grep "error" $file; then echo "$echo_contains_errors"; fi done
 
 for file in *.txt; do
     if grep "error" $file; then
-        echo "$file_contains_errors"
+        echo "$file_contains_errors";
     else
-        echo "$file_is_clean"
+        echo "$file_is_clean";
     fi
 done
